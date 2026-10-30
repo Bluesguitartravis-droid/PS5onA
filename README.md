@@ -48,3 +48,8 @@ Use only software and game data you are legally entitled to use. This repository
 6. Guest x86-64 execution backend for ARM64
 7. Bring up simple PS5 homebrew/test binaries
 8. Incremental commercial-game compatibility work
+
+## Contributors
+
+- [Bluesguitartravis-droid](https://github.com/Bluesguitartravis-droid) — project owner
+- Claude (Anthropic) — AI development assistant
