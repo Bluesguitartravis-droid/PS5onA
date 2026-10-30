@@ -21,7 +21,10 @@ class MainActivity : AppCompatActivity() {
     private val pickGame = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let {
             contentResolver.takePersistableUriPermission(it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            prefs.edit().putString("game_uri", it.toString()).apply()
+            prefs.edit()
+                .putString("game_uri", it.toString())
+                .putString("game_directory_name", displayName(it))
+                .apply()
             recreate()
         }
     }
@@ -44,7 +47,26 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Color.BLACK
         window.navigationBarColor = Color.BLACK
-        setContentView(buildHome())
+        if (prefs.getString("game_uri", null) == null) {
+            showFirstRunPrompt()
+        } else {
+            setContentView(buildHome())
+        }
+    }
+
+    private fun showFirstRunPrompt() {
+        val message = TextView(this).apply {
+            text = "Choose the folder where your games are stored. PS5onA will use it as your library and scan it for supported titles. You can change this later in Settings."
+            setPadding(dp(24), dp(12), dp(24), dp(4))
+            textSize = 16f
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Select Games Folder")
+            .setView(message)
+            .setCancelable(false)
+            .setPositiveButton("Choose Folder") { _, _ -> pickGame.launch(null) }
+            .show()
     }
 
     private fun buildHome(): View {
@@ -104,6 +126,23 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), 0, dp(24), dp(8))
         }
+
+        panel.addView(header("Library"))
+        panel.addView(TextView(this).apply {
+            text = "Games folder"
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        panel.addView(TextView(this).apply {
+            text = prefs.getString("game_directory_name", null)
+                ?: prefs.getString("game_uri", null)
+                ?: "Not selected"
+            setTextColor(Color.DKGRAY)
+            setPadding(0, dp(4), 0, dp(8))
+        })
+        panel.addView(Button(this).apply {
+            text = "Change Games Folder"
+            setOnClickListener { pickGame.launch(null) }
+        })
 
         panel.addView(header("Graphics"))
         val scaleLabel = TextView(this)
