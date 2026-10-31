@@ -19,8 +19,8 @@ import java.util.zip.ZipOutputStream
  *
  * Layout inside the app's private storage:
  *   files/logs/native.log(.1)   rolling log written by the native logger (Kotlin logs go here too)
- *   files/crashes/*.txt         one report per native signal or uncaught Java/Kotlin exception
- *   cache/exports/*.zip         bundles produced by [exportBundle] for the share sheet
+ *   files/crashes/              one .txt report per native signal or uncaught Java/Kotlin exception
+ *   cache/exports/              zip bundles produced by [exportBundle] for the share sheet
  */
 object Diagnostics {
     private const val TAG = "PS5onA"
