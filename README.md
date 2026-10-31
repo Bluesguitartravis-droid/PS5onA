@@ -42,7 +42,7 @@ Use only software and game data you are legally entitled to use. This repository
 
 1. Android app + NDK bootstrap
 2. Vulkan device/surface capability probe
-3. Native logging and crash-report export
+3. Native logging and crash-report export (see [docs/diagnostics.md](docs/diagnostics.md))
 4. Port architecture-independent Kyty subsystems
 5. Android filesystem/input/audio adaptation
 6. Guest x86-64 execution backend for ARM64

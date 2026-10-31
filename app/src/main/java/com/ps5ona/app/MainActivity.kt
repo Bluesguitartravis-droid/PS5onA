@@ -11,16 +11,16 @@ import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.ps5ona.app.diagnostics.Diagnostics
 
 class MainActivity : AppCompatActivity() {
-    companion object { init { System.loadLibrary("ps5ona") } }
-
     private external fun nativeStatus(): String
     private val prefs by lazy { getSharedPreferences("ps5ona", MODE_PRIVATE) }
 
     private val pickGame = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let {
             contentResolver.takePersistableUriPermission(it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            Diagnostics.i("Games folder selected: ${displayName(it)}")
             prefs.edit()
                 .putString("game_uri", it.toString())
                 .putString("game_directory_name", displayName(it))
@@ -32,6 +32,7 @@ class MainActivity : AppCompatActivity() {
     private val pickTurnip = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
             contentResolver.takePersistableUriPermission(it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            Diagnostics.i("Turnip driver package selected: ${displayName(it)}")
             prefs.edit().putString("turnip_uri", it.toString()).putString("turnip_name", displayName(it)).apply()
         }
     }
@@ -39,6 +40,7 @@ class MainActivity : AppCompatActivity() {
     private val pickLossless = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
             contentResolver.takePersistableUriPermission(it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            Diagnostics.i("Lossless.dll imported: ${displayName(it)}")
             prefs.edit().putString("lossless_uri", it.toString()).putString("lossless_name", displayName(it)).apply()
         }
     }
@@ -51,8 +53,43 @@ class MainActivity : AppCompatActivity() {
             showFirstRunPrompt()
         } else {
             setContentView(buildHome())
+            offerCrashReportIfNeeded()
         }
     }
+
+    private fun offerCrashReportIfNeeded() {
+        val unseen = Diagnostics.unseenCrashReports()
+        if (unseen.isEmpty()) return
+        Diagnostics.w("Found ${unseen.size} unseen crash report(s): ${unseen.joinToString { it.name }}")
+        AlertDialog.Builder(this)
+            .setTitle("PS5onA closed unexpectedly")
+            .setMessage("A crash report was saved last time PS5onA ran. Exporting it with your logs helps track down the problem.")
+            .setPositiveButton("Export report") { _, _ ->
+                Diagnostics.markCrashReportsSeen()
+                exportDiagnostics()
+            }
+            .setNegativeButton("Not now") { _, _ -> Diagnostics.markCrashReportsSeen() }
+            .setOnCancelListener { Diagnostics.markCrashReportsSeen() }
+            .show()
+    }
+
+    private fun exportDiagnostics() {
+        Toast.makeText(this, "Preparing diagnostics…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val result = runCatching { Diagnostics.exportBundle(prefs.all) }
+            runOnUiThread {
+                result.onSuccess { startActivity(Diagnostics.shareIntent(it)) }
+                    .onFailure {
+                        Diagnostics.e("Diagnostics export failed", it)
+                        Toast.makeText(this, "Export failed: ${it.message}", Toast.LENGTH_LONG).show()
+                    }
+            }
+        }.start()
+    }
+
+    private fun nativeStatusLine(): String =
+        if (!Diagnostics.nativeReady) "Native bootstrap unavailable"
+        else runCatching { nativeStatus().lineSequence().first() }.getOrDefault("Native bootstrap unavailable")
 
     private fun showFirstRunPrompt() {
         val message = TextView(this).apply {
@@ -113,7 +150,7 @@ class MainActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
         root.addView(TextView(this).apply {
-            text = runCatching { nativeStatus().lineSequence().first() }.getOrDefault("Native bootstrap unavailable")
+            text = nativeStatusLine()
             setTextColor(Color.rgb(80, 85, 95))
             textSize = 10f
             gravity = Gravity.END
@@ -206,6 +243,40 @@ class MainActivity : AppCompatActivity() {
             setTextColor(Color.GRAY)
             setPadding(0, dp(8), 0, 0)
         })
+
+        panel.addView(header("Diagnostics"))
+        val reportCount = Diagnostics.crashReports().size
+        panel.addView(TextView(this).apply {
+            text = if (reportCount == 0) "No crash reports saved" else "$reportCount crash report(s) saved"
+            setPadding(0, 0, 0, dp(4))
+        })
+        panel.addView(Button(this).apply {
+            text = "Export logs & crash reports"
+            setOnClickListener { exportDiagnostics() }
+        })
+        panel.addView(Button(this).apply {
+            text = "Clear logs & crash reports"
+            setOnClickListener {
+                Diagnostics.clearAll()
+                Toast.makeText(this@MainActivity, "Diagnostics cleared", Toast.LENGTH_SHORT).show()
+            }
+        })
+        if (BuildConfig.DEBUG) {
+            panel.addView(TextView(this).apply {
+                text = "Debug build: test the crash pipeline. The app will close; reopen it to see the report prompt."
+                textSize = 11f
+                setTextColor(Color.GRAY)
+                setPadding(0, dp(8), 0, 0)
+            })
+            panel.addView(Button(this).apply {
+                text = "Trigger native test crash"
+                setOnClickListener { Diagnostics.triggerTestCrash(native = true) }
+            })
+            panel.addView(Button(this).apply {
+                text = "Trigger Kotlin test crash"
+                setOnClickListener { Diagnostics.triggerTestCrash(native = false) }
+            })
+        }
 
         AlertDialog.Builder(this)
             .setTitle("Settings")
