@@ -27,7 +27,24 @@ jobs:
           gradle-version: "8.9"
 
       - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle assembleDebug --stacktrace 2>&1 | tee build.log
+
+      - name: Report build errors
+        if: failure()
+        shell: bash
+        run: |
+          # Surface the Gradle failure reason as an annotation so it shows on
+          # the run summary and PR without opening the full log.
+          {
+            grep -E '^(e: |w: .*error|C/C\+\+: .*error|.*error: )' build.log | head -40
+            echo "----"
+            grep -A 25 'What went wrong' build.log | head -60
+          } > errors.txt || true
+          msg=$(sed -e 's/%/%25/g' errors.txt | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Gradle build failed::${msg}"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
