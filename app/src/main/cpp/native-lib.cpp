@@ -1,18 +1,32 @@
 #include <jni.h>
-#include <android/log.h>
 #include <vulkan/vulkan.h>
 
 #include <sstream>
 #include <string>
 
+#include "diagnostics/crash_handler.h"
+#include "diagnostics/logger.h"
+
 namespace {
-constexpr const char* TAG = "PS5onA";
+
+std::string ToStdString(JNIEnv* env, jstring value) {
+    if (value == nullptr) {
+        return {};
+    }
+    const char* chars = env->GetStringUTFChars(value, nullptr);
+    std::string result = chars != nullptr ? chars : "";
+    if (chars != nullptr) {
+        env->ReleaseStringUTFChars(value, chars);
+    }
+    return result;
 }
+
+}  // namespace
 
 extern "C"
 JNIEXPORT jstring JNICALL
 Java_com_ps5ona_app_MainActivity_nativeStatus(JNIEnv* env, jobject) {
-    __android_log_print(ANDROID_LOG_INFO, TAG, "PS5onA native bootstrap started");
+    LOGI("PS5onA native bootstrap started");
 
     uint32_t api_version = VK_API_VERSION_1_0;
     const VkResult result = vkEnumerateInstanceVersion(&api_version);
@@ -38,7 +52,36 @@ Java_com_ps5ona_app_MainActivity_nativeStatus(JNIEnv* env, jobject) {
 #endif
 
     const std::string status = out.str();
-    __android_log_print(ANDROID_LOG_INFO, TAG, "%s", status.c_str());
+    LOGI("%s", status.c_str());
 
     return env->NewStringUTF(status.c_str());
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_ps5ona_app_diagnostics_NativeDiagnostics_nativeInit(JNIEnv* env, jobject, jstring log_dir,
+                                                             jstring crash_dir, jstring header) {
+    ps5ona::log::Init(ToStdString(env, log_dir));
+    ps5ona::crash::Install(ToStdString(env, crash_dir), ToStdString(env, header));
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_ps5ona_app_diagnostics_NativeDiagnostics_nativeLog(JNIEnv* env, jobject, jint level, jstring tag,
+                                                            jstring message) {
+    const std::string tag_text = ToStdString(env, tag);
+    const std::string message_text = ToStdString(env, message);
+    ps5ona::log::Write(static_cast<ps5ona::log::Level>(level), tag_text.c_str(), "%s", message_text.c_str());
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_ps5ona_app_diagnostics_NativeDiagnostics_nativeFlush(JNIEnv*, jobject) {
+    ps5ona::log::Flush();
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_ps5ona_app_diagnostics_NativeDiagnostics_nativeTestCrash(JNIEnv*, jobject) {
+    ps5ona::crash::TriggerTestCrash();
 }
